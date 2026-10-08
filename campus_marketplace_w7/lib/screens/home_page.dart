@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../models/item.dart';
 import '../models/cart_model.dart';
 import '../repositories/item_repository.dart';
+import '../services/gemini_service.dart'; // 1. นำเข้า GeminiService
 import 'checkout_page.dart';
 
 class HomePage extends StatefulWidget {
@@ -80,6 +81,39 @@ class _HomePageState extends State<HomePage> {
               );
             },
           );
+        },
+      ),
+      
+      // 2. เพิ่มปุ่มทดสอบ Gemini ตรงนี้ชั่วคราวสำหรับ Checkpoint 2.1
+      floatingActionButton: FloatingActionButton(
+        child: const Icon(Icons.auto_awesome),
+        onPressed: () async {
+          try {
+            // เรียกใช้งาน GeminiService
+            final responseText = await GeminiService().generateText(
+              'ช่วยแต่งประโยคทักทายลูกค้าร้านค้าออนไลน์แบบเป็นกันเอง',
+            );
+
+            // พิมพ์ลงใน Debug Console ของ VS Code
+            print('Gemini Result: $responseText');
+
+            // แสดงคำตอบบนหน้าจอแอปด้วย SnackBar
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(responseText),
+                  duration: const Duration(seconds: 5),
+                ),
+              );
+            }
+          } catch (e) {
+            print('Gemini Error: $e');
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('เกิดข้อผิดพลาด: $e')),
+              );
+            }
+          }
         },
       ),
     );
