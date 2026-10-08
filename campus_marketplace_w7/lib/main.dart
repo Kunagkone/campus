@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'models/cart_model.dart';
-import 'screens/main_scaffold.dart';
+import 'screens/main_scaffold.dart';   // 1. เพิ่ม import บรรทัดนี้
 import 'repositories/item_repository_api.dart';
 
 void main() {
@@ -21,7 +21,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Campus Marketplace',
       debugShowCheckedModeBanner: false,
-      home: MainScaffold(repository: ItemRepositoryApi()),
+      home: MainScaffold(repository: ItemRepositoryApi()),   // 2. เปลี่ยนตรงนี้เป็น MainScaffold[cite: 1]
     );
   }
 }
