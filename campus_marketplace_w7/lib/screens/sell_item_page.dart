@@ -77,6 +77,30 @@ class _SellItemPageState extends State<SellItemPage> {
     }
   }
 
+  // ฟังก์ชันบันทึกร่างประกาศ และล้างฟอร์ม ( Human-in-the-loop )
+  void _submitForm() {
+    if (_titleController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('กรุณากรอกชื่อประกาศก่อนยืนยัน')),
+      );
+      return;
+    }
+
+    // แสดง SnackBar ยืนยันสำเร็จ
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('บันทึกร่างประกาศเรียบร้อยแล้ว')),
+    );
+
+    // ล้างค่าในฟอร์มกลับสู่สถานะว่างเปล่า (ไม่ต้อง Navigator.pop() เพราะอยู่ใน Tab Bar)
+    setState(() {
+      _selectedImage = null;
+      _titleController.clear();
+      _categoryController.clear();
+      _descriptionController.clear();
+      _errorMessage = null;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -153,6 +177,14 @@ class _SellItemPageState extends State<SellItemPage> {
                 labelText: 'คำบรรยายสินค้า',
                 border: OutlineInputBorder(),
               ),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: _submitForm,
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+              ),
+              child: const Text('ยืนยันร่างประกาศ', style: TextStyle(fontSize: 16)),
             ),
           ],
         ),
