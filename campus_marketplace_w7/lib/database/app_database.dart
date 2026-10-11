@@ -1,22 +1,25 @@
+import 'dart:io';
 import 'package:drift/drift.dart';
+import 'package:drift/native.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as p;
 
-// ตารางที่ 1: รายการสินค้าโปรด (Favorites)
-class FavoriteItems extends Table {
-  IntColumn get id => integer().autoIncrement()();
-  IntColumn get itemId => integer().unique()(); // .unique() ป้องกันการกดถูกใจสินค้าชิ้นเดิมซ้ำ
-  TextColumn get title => text()();
-  RealColumn get price => real()();
-  TextColumn get imageUrl => text()();
-  DateTimeColumn get addedAt => dateTime().withDefault(currentDateAndTime)();
+import 'tables.dart';
+
+part 'app_database.g.dart';
+
+@DriftDatabase(tables: [FavoriteItems, ListingDrafts])
+class AppDatabase extends _$AppDatabase {
+  AppDatabase() : super(_openConnection());
+
+  @override
+  int get schemaVersion => 1;
 }
 
-// ตารางที่ 2: ร่างประกาศขายสินค้า (Listing Drafts)
-@DataClassName('ListingDraftRow') // ตั้งชื่อ Class เพื่อไม่ให้ซ้ำกับ ListingDraft ในสัปดาห์ที่ 7
-class ListingDrafts extends Table {
-  IntColumn get id => integer().autoIncrement()();
-  TextColumn get title => text().withLength(min: 1, max: 100)();
-  TextColumn get category => text()();
-  TextColumn get description => text()();
-  TextColumn get imagePath => text()();
-  DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
+LazyDatabase _openConnection() {
+  return LazyDatabase(() async {
+    final dbFolder = await getApplicationDocumentsDirectory();
+    final file = File(p.join(dbFolder.path, 'db.sqlite'));
+    return NativeDatabase.createInBackground(file);
+  });
 }

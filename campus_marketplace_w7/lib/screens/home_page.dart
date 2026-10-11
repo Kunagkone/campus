@@ -3,12 +3,19 @@ import 'package:provider/provider.dart';
 import '../models/item.dart';
 import '../models/cart_model.dart';
 import '../repositories/item_repository.dart';
-import '../services/gemini_service.dart'; // 1. นำเข้า GeminiService
+import '../repositories/favorites_repository.dart'; // 1. นำเข้า FavoritesRepository
+import '../services/gemini_service.dart';
 import 'checkout_page.dart';
 
 class HomePage extends StatefulWidget {
   final ItemRepository repository;
-  const HomePage({super.key, required this.repository});
+  final FavoritesRepository favoritesRepository; // 2. เพิ่ม field รับ favoritesRepository
+
+  const HomePage({
+    super.key,
+    required this.repository,
+    required this.favoritesRepository, // 2. เพิ่มพารามิเตอร์ผ่าน Constructor
+  });
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -69,14 +76,52 @@ class _HomePageState extends State<HomePage> {
                 ),
                 title: Text(item.title),
                 subtitle: Text('${item.price} บาท'),
-                trailing: IconButton(
-                  icon: const Icon(Icons.add_shopping_cart),
-                  onPressed: () {
-                    context.read<CartModel>().add(item);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('เพิ่ม "${item.title}" ลงตะกร้าแล้ว')),
-                    );
-                  },
+                
+                // 3. ปรับเปลี่ยน trailing เป็น Row เพื่อใส่ปุ่มหัวใจคู่กับปุ่มตะกร้า
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // ปุ่มที่ 1: กดถูกใจ (Favorites)
+                    IconButton(
+                      icon: const Icon(Icons.favorite_border, color: Colors.red),
+                      onPressed: () async {
+                        try {
+                          await widget.favoritesRepository.addFavorite(
+                            item.id,
+                            item.title,
+                            item.price,
+                            item.imageUrl,
+                          );
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('เพิ่ม "${item.title}" ในรายการโปรดแล้ว'),
+                              ),
+                            );
+                          }
+                        } catch (e) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('ไม่สามารถเพิ่มในรายการโปรดได้'),
+                              ),
+                            );
+                          }
+                        }
+                      },
+                    ),
+                    
+                    // ปุ่มที่ 2: เพิ่มลงตะกร้า (เดิม)
+                    IconButton(
+                      icon: const Icon(Icons.add_shopping_cart),
+                      onPressed: () {
+                        context.read<CartModel>().add(item);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('เพิ่ม "${item.title}" ลงตะกร้าแล้ว')),
+                        );
+                      },
+                    ),
+                  ],
                 ),
               );
             },
@@ -84,20 +129,17 @@ class _HomePageState extends State<HomePage> {
         },
       ),
       
-      // 2. เพิ่มปุ่มทดสอบ Gemini ตรงนี้ชั่วคราวสำหรับ Checkpoint 2.1
+      // ปุ่มทดสอบ Gemini (คงไว้ตามเดิม)
       floatingActionButton: FloatingActionButton(
         child: const Icon(Icons.auto_awesome),
         onPressed: () async {
           try {
-            // เรียกใช้งาน GeminiService
             final responseText = await GeminiService().generateText(
               'ช่วยแต่งประโยคทักทายลูกค้าร้านค้าออนไลน์แบบเป็นกันเอง',
             );
 
-            // พิมพ์ลงใน Debug Console ของ VS Code
             print('Gemini Result: $responseText');
 
-            // แสดงคำตอบบนหน้าจอแอปด้วย SnackBar
             if (context.mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
