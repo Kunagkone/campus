@@ -5,7 +5,7 @@ import 'database/app_database.dart';
 import 'models/cart_model.dart';
 import 'repositories/item_repository_api.dart';
 import 'repositories/favorites_repository_drift.dart';
-import 'repositories/listing_draft_repository_drift.dart';
+import 'repositories/listing_draft_repository_drift.dart'; // <--- ต้องมีบรรทัดนี้
 import 'screens/main_scaffold.dart';
 
 void main() {
