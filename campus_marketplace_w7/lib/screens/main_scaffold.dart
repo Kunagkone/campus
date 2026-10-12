@@ -1,19 +1,21 @@
 import 'package:flutter/material.dart';
-
 import 'home_page.dart';
 import 'sell_item_page.dart';
 import 'favorites_page.dart';
 import '../repositories/item_repository.dart';
 import '../repositories/favorites_repository.dart';
+import '../repositories/listing_draft_repository.dart';
 
 class MainScaffold extends StatefulWidget {
   final ItemRepository itemRepository;
   final FavoritesRepository favoritesRepository;
+  final ListingDraftRepository draftRepository;
 
   const MainScaffold({
     super.key,
     required this.itemRepository,
     required this.favoritesRepository,
+    required this.draftRepository,
   });
 
   @override
@@ -30,7 +32,7 @@ class _MainScaffoldState extends State<MainScaffold> {
         repository: widget.itemRepository,
         favoritesRepository: widget.favoritesRepository,
       ),
-      const SellItemPage(),
+      SellItemPage(draftRepository: widget.draftRepository),
       FavoritesPage(repository: widget.favoritesRepository),
     ];
 

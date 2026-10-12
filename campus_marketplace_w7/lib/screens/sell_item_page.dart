@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../models/listing_draft.dart';
 import '../repositories/listing_draft_repository.dart';
+import '../services/gemini_vision_service.dart';
 
 class SellItemPage extends StatefulWidget {
   final ListingDraftRepository draftRepository;
@@ -14,50 +15,67 @@ class SellItemPage extends StatefulWidget {
 }
 
 class _SellItemPageState extends State<SellItemPage> {
-  final _titleController = TextEditingController();
-  final _descriptionController = TextEditingController();
-  String _selectedCategory = 'อุปกรณ์การเรียน';
-  String? _imagePath;
+  File? _selectedImage;
+  bool _isLoading = false;
+  String? _errorMessage;
 
-  final List<String> _categories = [
-    'อุปกรณ์การเรียน',
-    'เครื่องใช้ไฟฟ้า',
-    'เสื้อผ้า/แฟชั่น',
-    'หนังสือ',
-    'อื่นๆ',
-  ];
+  final _titleController = TextEditingController();
+  final _categoryController = TextEditingController();
+  final _descriptionController = TextEditingController();
+
+  static const String _prompt = '''
+คุณคือผู้ช่วยเขียนประกาศขายของมือสองในตลาดนัดออนไลน์สำหรับนักศึกษามหาวิทยาลัย
+จากรูปภาพสินค้าที่แนบมา ให้วิเคราะห์แล้วตอบกลับเป็น JSON เท่านั้น ตามโครงสร้างนี้:
+{
+  "title": "ชื่อประกาศสั้นกระชับ ไม่เกิน 40 ตัวอักษร",
+  "category": "หมวดหมู่ที่เหมาะสมที่สุด เลือกจาก: หนังสือเรียน, อุปกรณ์อิเล็กทรอนิกส์, ของแต่งหอพัก, เสื้อผ้า, อื่นๆ",
+  "description": "คำบรรยายสินค้า 2-3 ประโยค ที่ดึงดูดผู้ซื้อและบอกสภาพของสินค้าตามที่เห็นในภาพ"
+}
+ห้ามตอบข้อความอื่นนอกเหนือจาก JSON ดังกล่าว
+''';
 
   @override
   void initState() {
     super.initState();
-    _loadSavedDraft();
+    _loadSavedDraft(); // โหลดร่างประกาศจาก SQLite เมื่อเปิดหน้า
   }
 
-  // โหลดร่างประกาศที่เคยบันทึกไว้ใน SQLite เมื่อเปิดหน้า
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _categoryController.dispose();
+    _descriptionController.dispose();
+    super.dispose();
+  }
+
+  // 1. โหลดร่างประกาศที่เคยบันทึกไว้ใน SQLite
   Future<void> _loadSavedDraft() async {
     final draft = await widget.draftRepository.getDraft();
     if (draft != null && mounted) {
       setState(() {
         _titleController.text = draft.title;
+        _categoryController.text = draft.category;
         _descriptionController.text = draft.description;
-        if (_categories.contains(draft.category)) {
-          _selectedCategory = draft.category;
+        if (draft.imagePath != null && draft.imagePath!.isNotEmpty) {
+          final file = File(draft.imagePath!);
+          if (file.existsSync()) {
+            _selectedImage = file;
+          }
         }
-        _imagePath = draft.imagePath;
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('โหลดร่างประกาศล่าสุดสำเร็จ')),
+        const SnackBar(content: Text('โหลดร่างประกาศล่าสุดจากฐานข้อมูลสำเร็จ')),
       );
     }
   }
 
-  // บันทึกร่างประกาศลง SQLite
+  // 2. บันทึกร่างประกาศลง SQLite
   Future<void> _saveDraft() async {
     final draft = ListingDraft(
       title: _titleController.text,
-      category: _selectedCategory,
+      category: _categoryController.text,
       description: _descriptionController.text,
-      imagePath: _imagePath,
+      imagePath: _selectedImage?.path,
     );
     await widget.draftRepository.saveDraft(draft);
     if (mounted) {
@@ -67,14 +85,15 @@ class _SellItemPageState extends State<SellItemPage> {
     }
   }
 
-  // ลบไฟล์ร่างประกาศ
+  // 3. ลบร่างประกาศออกจาก SQLite และล้างฟอร์ม
   Future<void> _clearDraft() async {
     await widget.draftRepository.deleteDraft();
     setState(() {
+      _selectedImage = null;
       _titleController.clear();
+      _categoryController.clear();
       _descriptionController.clear();
-      _selectedCategory = _categories.first;
-      _imagePath = null;
+      _errorMessage = null;
     });
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -88,8 +107,55 @@ class _SellItemPageState extends State<SellItemPage> {
     final pickedFile = await picker.pickImage(source: ImageSource.gallery);
     if (pickedFile != null) {
       setState(() {
-        _imagePath = pickedFile.path;
+        _selectedImage = File(pickedFile.path);
+        _errorMessage = null;
       });
+    }
+  }
+
+  Future<void> _analyzeImage() async {
+    if (_selectedImage == null) return;
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final result = await GeminiVisionService()
+          .analyzeProductImage(_selectedImage!, _prompt);
+
+      setState(() {
+        _titleController.text = result.title;
+        _categoryController.text = result.category;
+        _descriptionController.text = result.description;
+      });
+    } catch (e) {
+      setState(() {
+        _errorMessage = e.toString().replaceAll('Exception: ', '');
+      });
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  // ฟังก์ชันยืนยันลงประกาศขาย (พร้อมเซฟร่างลง SQLite)
+  Future<void> _submitForm() async {
+    if (_titleController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('กรุณากรอกชื่อประกาศก่อนยืนยัน')),
+      );
+      return;
+    }
+
+    await _saveDraft(); // บันทึกลง SQLite
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('ลงประกาศขายและบันทึกร่างเรียบร้อยแล้ว')),
+      );
     }
   }
 
@@ -116,72 +182,82 @@ class _SellItemPageState extends State<SellItemPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            GestureDetector(
-              onTap: _pickImage,
-              child: Container(
-                height: 180,
-                decoration: BoxDecoration(
-                  color: Colors.grey[200],
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.grey[400]!),
-                ),
-                child: _imagePath != null && _imagePath!.isNotEmpty
-                    ? Image.file(File(_imagePath!), fit: BoxFit.cover)
-                    : const Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.add_a_photo, size: 40, color: Colors.grey),
-                          SizedBox(height: 8),
-                          Text('แตะเพื่อเลือกรูปภาพสินค้า'),
-                        ],
-                      ),
+            _selectedImage != null
+                ? Image.file(_selectedImage!, height: 200, fit: BoxFit.cover)
+                : Container(
+                    height: 200,
+                    color: Colors.grey[200],
+                    child: const Icon(Icons.image, size: 80, color: Colors.grey),
+                  ),
+            const SizedBox(height: 12),
+            ElevatedButton.icon(
+              onPressed: _pickImage,
+              icon: const Icon(Icons.photo_library),
+              label: const Text('เลือกรูปภาพสินค้า'),
+            ),
+            const SizedBox(height: 12),
+            ElevatedButton.icon(
+              onPressed: (_selectedImage == null || _isLoading)
+                  ? null
+                  : _analyzeImage,
+              icon: const Icon(Icons.auto_awesome),
+              label: const Text('ให้ AI ช่วยแนะนำ'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.deepPurple,
+                foregroundColor: Colors.white,
               ),
             ),
             const SizedBox(height: 16),
+            if (_isLoading)
+              const Column(
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 8),
+                  Text('AI กำลังวิเคราะห์ภาพสินค้า...'),
+                ],
+              ),
+            if (_errorMessage != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12.0),
+                child: Text(
+                  _errorMessage!,
+                  style: const TextStyle(
+                      color: Colors.red, fontWeight: FontWeight.bold),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            const Divider(height: 32),
             TextField(
               controller: _titleController,
               decoration: const InputDecoration(
-                labelText: 'ชื่อสินค้า',
+                labelText: 'ชื่อประกาศ',
                 border: OutlineInputBorder(),
               ),
             ),
-            const SizedBox(height: 16),
-            DropdownButtonFormField<String>(
-              value: _selectedCategory,
+            const SizedBox(height: 12),
+            TextField(
+              controller: _categoryController,
               decoration: const InputDecoration(
                 labelText: 'หมวดหมู่',
                 border: OutlineInputBorder(),
               ),
-              items: _categories.map((cat) {
-                return DropdownMenuItem(value: cat, child: Text(cat));
-              }).toList(),
-              onChanged: (val) {
-                if (val != null) setState(() => _selectedCategory = val);
-              },
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             TextField(
               controller: _descriptionController,
-              maxLines: 4,
+              maxLines: 3,
               decoration: const InputDecoration(
-                labelText: 'รายละเอียดสินค้า',
+                labelText: 'คำบรรยายสินค้า',
                 border: OutlineInputBorder(),
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 20),
             ElevatedButton(
-              onPressed: () async {
-                await _saveDraft();
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('ลงประกาศขายสินค้าเรียบร้อย')),
-                  );
-                }
-              },
+              onPressed: _submitForm,
               style: ElevatedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 16),
               ),
-              child: const Text('ลงประกาศขาย', style: TextStyle(fontSize: 16)),
+              child: const Text('ยืนยันร่างประกาศ', style: TextStyle(fontSize: 16)),
             ),
           ],
         ),
