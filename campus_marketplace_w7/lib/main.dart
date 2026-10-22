@@ -1,4 +1,3 @@
-import 'package:provider/provider.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -10,6 +9,7 @@ import 'repositories/item_repository_api.dart';
 import 'repositories/favorites_repository_drift.dart';
 import 'repositories/listing_draft_repository_drift.dart';
 import 'screens/main_scaffold.dart';
+import 'screens/login_page.dart'; // Import หน้า LoginPage เพิ่มเข้ามา
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -36,11 +36,14 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Campus Marketplace',
       debugShowCheckedModeBanner: false,
+      home: const LoginPage(), // เปลี่ยนชั่วคราวเพื่อทดสอบหน้า Login ตามสัปดาห์ที่ 9 ส่วนที่ 2-3
+      /*
       home: MainScaffold(
         itemRepository: ItemRepositoryApi(),
         favoritesRepository: FavoritesRepositoryDrift(db),
         draftRepository: ListingDraftRepositoryDrift(db),
       ),
+      */
     );
   }
 }
