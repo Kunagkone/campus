@@ -1,14 +1,22 @@
+/ แก้พิมพ์ตกถ้ามี หรือใช้ import 'package:provider/provider.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 
 import 'database/app_database.dart';
 import 'models/cart_model.dart';
 import 'repositories/item_repository_api.dart';
 import 'repositories/favorites_repository_drift.dart';
-import 'repositories/listing_draft_repository_drift.dart'; // <--- ต้องมีบรรทัดนี้
+import 'repositories/listing_draft_repository_drift.dart';
 import 'screens/main_scaffold.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+
   final db = AppDatabase();
 
   runApp(
