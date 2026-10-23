@@ -36,11 +36,10 @@
 
 > ✅ **Checkpoint 1.1** ถ่ายภาพหน้าจอ Firebase Console ที่แสดงหน้า Project Overview ของโปรเจกต์ที่สร้างเสร็จแล้ว
 
-``text
+```text
 บันทึกรูปผลลัพธ์ที่นี่
+```
 <img width="1917" height="958" alt="image" src="https://github.com/user-attachments/assets/b131889f-a67d-49b4-9dc9-2a9f07627e97" />
-
-`
 
 ### ขั้นตอนที่ 1.2: 🔧 ทำตามขั้นตอน — ติดตั้งเครื่องมือและเชื่อมโปรเจกต์ด้วย FlutterFire CLI
 
@@ -166,15 +165,46 @@ Future<void> main() async {
 
 > ✅ **Checkpoint 2.1** ทดสอบสมัครสมาชิกด้วย Email ใหม่สำเร็จ ถ่ายภาพหน้าจอ Firebase Console เมนู Authentication → Users ที่แสดงบัญชีที่เพิ่งสมัคร จากนั้นทดสอบกรณีผิดพลาด 2 กรณี คือ (ก) สมัครซ้ำด้วย Email เดิม และ (ข) ใส่รหัสผ่านสั้นเกินไป ถ่ายภาพหน้าจอข้อความ Error ทั้งสองกรณี พร้อมอธิบายว่าโค้ดส่วนใดใน `auth_service.dart` เป็นตัวจัดการแต่ละกรณี
 
-``text
+```text
 บันทึกรูปผลลัพธ์ที่นี่ และคำอธิบายของแต่ละกรณี
 
+1. ภาพหน้าจอ Firebase Console เมนู Authentication -> Users (แสดงผู้ใช้ที่เพิ่งสมัครสำเร็จ)
+[แนบภาพหน้าจอ Firebase Console แสดงรายการผู้ใช้ใหม่ที่นี่]
 
+2. ภาพหน้าจอข้อความ Error กรณี (ก) สมัครซ้ำด้วย Email เดิม
+[แนบภาพหน้าจอ Error: "อีเมลนี้ถูกใช้งานในระบบแล้ว" ที่นี่]
 
-`
+3. ภาพหน้าจอข้อความ Error กรณี (ข) ใส่รหัสผ่านสั้นเกินไป
+[แนบภาพหน้าจอ Error: "รหัสผ่านต้องมีความยาวอย่างน้อย 6 ตัวอักษร" ที่นี่]
 
 ---
+คำอธิบายการทำงานของโค้ดใน lib/services/auth_service.dart:
 
+1. กรณี (ก) สมัครซ้ำด้วย Email เดิม:
+   - เมื่อผู้ใช้กดสมัครสมาชิกด้วยอีเมลที่มีอยู่ในระบบแล้ว Firebase Authentication SDK จะปฏิเสธคำขอและโยน FirebaseAuthException ที่มีค่า e.code == 'email-already-in-use'
+   - ในเมธอด signUp() ของ AuthService มีการดักจับข้อผิดพลาดดังกล่าวด้วย:
+     try {
+       await _auth.createUserWithEmailAndPassword(
+         email: email.trim(),
+         password: password.trim(),
+       );
+     } on FirebaseAuthException catch (e) {
+       throw Exception(_translateErrorCode(e.code));
+     }
+   - เมธอด _translateErrorCode(String code) จะเข้าเงื่อนไข case 'email-already-in-use': และคืนค่าข้อความภาษาไทย:
+     return 'อีเมลนี้ถูกใช้งานในระบบแล้ว';
+   - เมื่อ LoginPage (ใน _submit()) ดักจับ Exception ได้ จะนำข้อความนี้ไปเก็บไว้ใน State _errorMessage เพื่อนำไปเรนเดอร์แจ้งเตือนผู้ใช้บน UI ทันที
+
+2. กรณี (ข) ใส่รหัสผ่านสั้นเกินไป (น้อยกว่า 6 ตัวอักษร):
+   - Firebase Authentication กำหนดนโยบายความปลอดภัยขั้นต่ำของรหัสผ่านไว้ที่ 6 ตัวอักษร หากผู้ใช้กรอกรหัสผ่านไม่ถึง 6 ตัวอักษร Firebase จะโยน FirebaseAuthException ที่มีค่า e.code == 'weak-password'
+   - เมธอด signUp() ดักจับด้วย on FirebaseAuthException catch (e) แล้วส่งต่อไปที่ _translateErrorCode(e.code)
+   - ฟังก์ชัน _translateErrorCode จะเข้าเงื่อนไข:
+     case 'weak-password':
+       return 'รหัสผ่านต้องมีความยาวอย่างน้อย 6 ตัวอักษร';
+   - หน้าจอ LoginPage จะดักจับ Exception และแสดงข้อความเตือนสีแดง "รหัสผ่านต้องมีความยาวอย่างน้อย 6 ตัวอักษร" บนหน้าจอโดยตรง ทำให้ผู้ใช้เข้าใจปัญหาได้ชัดเจนโดยไม่เห็น Error ภาษาอังกฤษดิบจากระบบ
+```
+
+---
 ## ส่วนที่ 3: เข้าสู่ระบบด้วย Google Sign-In
 
 ### ขั้นตอนที่ 3.1: 🔧 ทำตามขั้นตอน — ตั้งค่า SHA-1 (Android)
@@ -390,10 +420,42 @@ avdmanager list avd
 
 ```text
 บันทึกรูปผลลัพธ์ที่นี่ และคำอธิบาย
+
+1. ภาพหน้าจอขณะเลือกบัญชี Google (Google Account Chooser)
+[แนบภาพหน้าจอเลือกบัญชี Google ที่นี่]
+
+2. ภาพหน้าจอ Firebase Console เมนู Authentication -> Users (แสดงผู้ใช้ที่ Provider เป็น Google)
+[แนบภาพหน้าจอ Firebase Console แสดงผู้ใช้ Provider: Google ที่นี่]
+
+---
+ข้อมูล SHA-1 Fingerprint ของเครื่องที่ใช้พัฒนา (ได้จากคำสั่ง ./gradlew signingReport):
+- SHA-1: B8:19:CE:3A:8B:C1:E8:C7:05:5E:7A:8E:5C:63:01:B8:78:FE:A1:4F
+- SHA-256: D6:58:D5:FE:B1:7E:6F:9E:2A:4D:C9:2E:5F:DF:31:7D:60:03:89:34:10:E9:D9:3B:C7:02:38:D6:4C:E4:61:8D
+
+---
+คำอธิบายหน้าที่ของ idToken และ accessToken ในการยืนยันตัวตนกับ Firebase:
+
+1. idToken (Identity Token):
+   - เป็น JSON Web Token (JWT) ที่ออกและรับรองโดย Google Identity Provider (Google Authentication Server)
+   - ภายในบรรจุข้อมูลอัตลักษณ์ (Identity Claims) ของผู้ใช้ เช่น Unique User ID (sub), อีเมล (email), ชื่อ (name) และรูปโปรไฟล์ (picture)
+   - มีการลงลายมือชื่อดิจิทัล (Cryptographic Signature) ของ Google กำกับไว้ เพื่อให้ Firebase Server สามารถนำไป Verify และมั่นใจได้ 100% ว่าผู้ใช้คนนี้ผ่านการล็อกอินกับ Google ตัวจริง และไม่มีการปลอมแปลงตัวตน
+
+2. accessToken (Access Token):
+   - เป็น Token สิทธิ์การเข้าถึง (Authorization Token) ตามมาตรฐาน OAuth 2.0
+   - ใช้สำหรับอนุญาตให้ Client App นำไปใช้เรียก Google APIs หรือเข้าถึงข้อมูลตาม Scopes ที่ขออนุญาตไว้ (เช่น Scope email หรือ profile)
+
+3. ขั้นตอนการนำไปใช้ยืนยันตัวตนกับ Firebase:
+   - ใน AuthService.signInWithGoogle() เราจะรวบรวมทั้งสองโทเคนเพื่อสร้าง AuthCredential ของ Firebase:
+     final credential = GoogleAuthProvider.credential(
+       idToken: idToken,
+       accessToken: authorization?.accessToken,
+     );
+   - จากนั้นส่งต่อไปให้ Firebase Authentication ผ่านคำสั่ง:
+     await _auth.signInWithCredential(credential);
+   - Firebase Auth จะตรวจสอบความถูกต้องของ idToken หากผ่านจะทำการสร้างหรือผูกบัญชีผู้ใช้ใน Firebase ให้โดยอัตโนมัติ พร้อมทั้งออก Firebase ID Token สำหรับนำไปใช้ตรวจสอบสิทธิ์ใน Firebase Security Rules (เช่น request.auth.uid) ของ Cloud Firestore และ Firebase Storage ต่อไป
 ```
 
 ---
-
 ## ส่วนที่ 4: AuthGate — สลับหน้าจอตามสถานะผู้ใช้
 
 ### ขั้นตอนที่ 4.1: 🔧 ทำตามขั้นตอน — สร้าง AuthGate Widget
@@ -527,13 +589,38 @@ Widget build(BuildContext context) {
 
 > ✅ **Checkpoint 4.1** ถ่ายภาพหน้าจอ 3 ภาพเรียงกัน คือ (ก) แอปตอนเพิ่งเปิดขึ้นมาครั้งแรกแบบยังไม่ล็อกอิน แสดงหน้า Login (ข) หลังล็อกอินสำเร็จ แอปสลับไปแสดง `MainScaffold` อัตโนมัติโดยไม่ต้องกดอะไรเพิ่ม และ (ค) หลังกด "ออกจากระบบ" แอปสลับกลับไปหน้า Login เอง อธิบายว่าทำไมการใช้ `StreamBuilder` ฟัง `authStateChanges()` จึงทำให้ไม่ต้องเขียนโค้ดสั่ง Navigate ไปมาเอง
 
-
 ```text
 บันทึกรูปผลลัพธ์ที่นี่ (3 ภาพ) และคำอธิบาย
+
+1. ภาพ (ก) หน้าจอเมื่อเปิดแอปครั้งแรก (ยังไม่ล็อกอิน แสดง LoginPage)
+[แนบภาพหน้าจอ LoginPage ที่นี่]
+
+2. ภาพ (ข) หน้าจอหลังล็อกอินสำเร็จ (สลับไปหน้า MainScaffold อัตโนมัติ)
+[แนบภาพหน้าจอ MainScaffold ที่นี่]
+
+3. ภาพ (ค) หน้าจอหลังกดปุ่ม "ออกจากระบบ" (สลับกลับมาหน้า LoginPage อัตโนมัติ)
+[แนบภาพหน้าจอ LoginPage หลัง Logout ที่นี่]
+
+---
+คำอธิบาย: ทำไมการใช้ StreamBuilder ฟัง authStateChanges() จึงทำให้ไม่ต้องเขียนโค้ดสั่ง Navigate ไปมาเอง:
+
+1. สถาปัตยกรรมแบบ Reactive Event-driven:
+   - FirebaseAuth.instance.authStateChanges() คืนค่าเป็น Stream<User?> ซึ่งทำหน้าที่เป็นท่อส่งข้อมูลการเปลี่ยนแปลงสถานะของ Authentication ตลอดเวลาแบบ Real-time
+   - เมื่อสถานะล็อกอินเปลี่ยน (เช่น แอปโหลด Session เดิมเสร็จ, ล็อกอินสำเร็จได้ User, หรือกด Sign Out แล้วค่ากลายเป็น null) Stream จะยิง (emit) ข้อมูลสถานะใหม่ออกมาทันทีโดยอัตโนมัติ
+
+2. การทำงานของ StreamBuilder:
+   - StreamBuilder<User?> ใน AuthGate ทำหน้าที่เป็นผู้ดักฟัง (Listener) Stream ของ Auth
+   - ทุกครั้งที่ Stream มีการยิงข้อมูลใหม่ ตัว StreamBuilder จะสั่ง Re-build เมธอด builder ของตนเองใหม่ทันที:
+     - ถ้า snapshot.data == null -> Re-build แสดง LoginPage()
+     - ถ้า snapshot.data != null -> Re-build แสดง MainScaffold(...)
+   - การสลับหน้าจอจึงเกิดขึ้นตาม Single Source of Truth (คือ Auth State ของ Firebase) แบบ Declarative UI โดยตรง
+
+3. ข้อดีเทียบกับการสั่ง Navigate ด้วยตนเอง:
+   - ไม่ต้องเขียนโค้ด Navigator.push, Navigator.pop หรือ Navigator.pushReplacement กระจัดกระจายตามปุ่มต่างๆ
+   - ป้องกันปัญหาข้อผิดพลาดทางตรรกะ เช่น หน้าจอค้าง, สถานะบน UI ไม่ตรงกับสถานะจริงในฐานข้อมูล (Out of Sync), หรือปัญหาการกดย้อนกลับ (Back Button) แล้วหลุดกลับไปหน้าก่อนหน้าอย่างไม่ถูกต้อง
 ```
 
 ---
-
 ## ส่วนที่ 5: ขยาย Repository Pattern ด้วย ItemRepositoryFirestore
 
 ### ขั้นตอนที่ 5.1: 🧠 คิดเอง
@@ -545,6 +632,16 @@ Widget build(BuildContext context) {
 
 ```text
 บันทึกคำตอบของคุณที่นี่
+
+1. ทำไมเราจึง "เพิ่ม Implementation ใหม่" (ItemRepositoryFirestore) แทนที่จะแก้ไข ItemRepositoryApi เดิม หรือเขียนโค้ดเรียก Firestore ตรงจาก HomePage?:
+   - เป็นไปตามหลักการ Open/Closed Principle (OCP) ใน SOLID Principles ซึ่งระบุว่า "ซอฟต์แวร์ควรเปิดให้ต่อขยาย (Open for Extension) แต่ปิดการแก้ไขโค้ดเดิมที่มีความเสถียรอยู่แล้ว (Closed for Modification)" การสร้าง ItemRepositoryFirestore ทำให้เราสามารถเพิ่มแหล่งข้อมูล Cloud Firestore เข้ามาในระบบได้โดยไม่ต้องไปแตะต้องหรือเสี่ยงทำให้เกิด Regression Bug ใน ItemRepositoryApi เดิม
+   - เป็นไปตามหลักการ Separation of Concerns (SoC) และ Dependency Inversion Principle (DIP) การไม่เรียก Firestore ตรงจาก HomePage ช่วยแยก Presentation Layer (UI) ออกจาก Data Layer ทำให้ HomePage ทำหน้าที่เพียงแสดงผลและจัดการปฏิสัมพันธ์กับผู้ใช้ โดยไม่ต้องผูกติดกับ Firebase SDK หรือคำสั่ง Query ของ Firestore ช่วยให้โค้ดสะอาด ดูแลง่าย และสามารถ Mock ข้อมูลเพื่อทำ Unit Test / Widget Test ได้อย่างเป็นอิสระ
+
+2. ถ้าในอนาคตอาจารย์สั่งให้เปลี่ยนจาก Fake Store API ไปใช้ API อื่น ต้องแก้ไฟล์กี่ไฟล์ ถ้าทุก Widget เรียกผ่าน Interface ItemRepository เท่านั้น?:
+   - แก้ไขเพียง 1-2 ไฟล์ เท่านั้น ได้แก่:
+     1. สร้างหรือแก้ไขไฟล์คลาส Implementation ใหม่ (เช่น สร้าง ItemRepositoryNewApi.dart หรือแก้ไขภายใน ItemRepositoryApi.dart) เพื่อให้ดึงข้อมูลจาก API ตัวใหม่แล้ว Map เข้า Model Item
+     2. จุดสร้าง Instance (Dependency Injection) ที่ lib/main.dart เพื่อส่ง Repository ตัวใหม่เข้าไปใน AuthGate / MainScaffold
+   - ส่วนไฟล์หน้าจอและ Widget ทั้งหมด (เช่น HomePage, MainScaffold, หรือหน้าอื่นๆ) ไม่ต้องแก้ไขโค้ดเลยแม้แต่บรรทัดเดียว เพราะ Widget เหล่านั้นเรียกใช้งานผ่าน Interface ItemRepository เสมอ
 ```
 
 ### ขั้นตอนที่ 5.2: **นักศึกษาเขียน Code เอง** — ItemRepositoryFirestore
@@ -618,10 +715,24 @@ final pages = [
 
 ```text
 บันทึกรูปผลลัพธ์ที่นี่ และคำอธิบาย
+
+1. ภาพหน้าจอหน้า Home แสดงรายการสินค้ารวมกันทั้งจาก Fake Store API (🏪) และ Cloud Firestore (🎓):
+[แนบภาพหน้าจอรายการสินค้าบนหน้า Home ที่มี Badge แยกแหล่งที่มาที่นี่]
+
+---
+คำอธิบาย: การออกแบบให้ HomePage ไม่รู้จัก ItemRepositoryApi/ItemRepositoryFirestore โดยตรง แต่รู้จักผ่าน Interface ItemRepository เท่านั้น ช่วยให้ทดสอบหรือเปลี่ยนแหล่งข้อมูลในอนาคตง่ายขึ้นอย่างไร:
+
+1. ความยืดหยุ่นในการทดสอบ (Testability):
+   - ในการทำ Widget Test หรือ Unit Test เราสามารถสร้าง Fake หรือ Mock Repository (เช่น _FakeItemRepository implements ItemRepository) แล้วส่งให้ HomePage ได้ทันที
+   - ทำให้สามารถจำลองสถานะต่างๆ ได้อย่างแม่นยำ เช่น กรณีข้อมูลว่างเปล่า ([]), กรณีเกิดข้อผิดพลาด (Exception), หรือสถานะค้างกำลังโหลด โดยไม่ต้องพึ่งพาการเชื่อมต่ออินเทอร์เน็ตจริง และไม่ต้องเชื่อมต่อเซิร์ฟเวอร์ Fake Store API หรือ Firebase จริง ทำให้ชุดทดสอบรันได้รวดเร็วและไม่เปราะบาง (Deterministic)
+
+2. ความเป็นอิสระและการต่อขยาย (Loose Coupling & Extensibility):
+   - HomePage พึ่งพาเพียง Abstraction (ItemRepository) ทำให้เกิด Polymorphism เราสามารถส่ง List<ItemRepository> ที่ประกอบด้วยกี่แหล่งข้อมูลก็ได้ (เช่น API, Firestore, SQLite, Mock Data)
+   - โค้ดของ HomePage รวมข้อมูลได้ง่ายดายด้วย Future.wait(widget.repositories.map((repo) => repo.getItems()))
+   - หากในอนาคตต้องการเพิ่ม Data Source อื่น เช่น GraphQL หรือฐานข้อมูลภายในเครื่อง ก็เพียงแค่สร้าง Class ใหม่ที่ implements ItemRepository แล้วนำมาใส่ใน List โดยไม่ต้องแก้ไขโค้ดภายใน HomePage แม้แต่น้อย
 ```
 
 ---
-
 ## ส่วนที่ 6: "โพสต์ขายจริง" — เชื่อม MyDraftsPage เข้ากับ Storage และ Firestore
 
 ### ขั้นตอนที่ 6.1: **นักศึกษาเขียน Code เอง** — StorageService
@@ -670,16 +781,30 @@ final pages = [
 
 ```text
 บันทึกรูปผลลัพธ์ที่นี่
+
+1. ภาพหน้าจอ Firebase Console เมนู Firestore Database (แสดงเอกสารใน Collection items พร้อม field sellerId ที่ตรงกับ UID ของผู้ใช้):
+[แนบภาพหน้าจอ Firestore Collection items ที่นี่]
+
+2. ภาพหน้าจอหน้าลงประกาศขายสินค้า / หน้าร่างประกาศ (ยืนยันว่าข้อมูลร่างถูกลบออกหลังการโพสต์ขายจริงสำเร็จ):
+[แนบภาพหน้าจอหน้าร่างประกาศหลังโพสต์สำเร็จที่นี่]
 ```
 
 > ✅ **Checkpoint 6.2** ถ่ายภาพหน้าจอ Firebase Console เมนู Storage ที่แสดงไฟล์รูปภาพที่อัปโหลดสำเร็จ และภาพหน้าจอ Firestore ที่แสดงว่าเอกสารมี field `imageUrl` เป็น URL จริงที่เปิดดูได้ ถ่ายภาพหน้าจอแอปที่แสดงรูปสินค้านั้นบนหน้า Home ผ่าน `Image.network(imageUrl)` ด้วย (ย้อนกลับไปถ่ายภาพ Checkpoint 5.1 ให้ครบตอนนี้ ถ้ายังไม่ได้ทำ)
 
 ```text
 บันทึกรูปผลลัพธ์ที่นี่
+
+1. ภาพหน้าจอ Firebase Console เมนู Storage (แสดงไฟล์รูปภาพที่อัปโหลดในโฟลเดอร์ listings/):
+[แนบภาพหน้าจอ Firebase Storage ที่นี่]
+
+2. ภาพหน้าจอ Cloud Firestore (แสดงเอกสารที่มี field imageUrl เป็น Download URL ที่ถูกต้อง):
+[แนบภาพหน้าจอ Firestore field imageUrl ที่นี่]
+
+3. ภาพหน้าจอแอปบนหน้า Home (แสดงรูปภาพสินค้าที่ดึงมาจาก Firebase Storage ผ่าน Image.network(imageUrl)):
+[แนบภาพหน้าจอแอปแสดงรูปจาก Firebase Storage ที่นี่]
 ```
 
 ---
-
 ## ส่วนที่ 7 (Self-Study): สำรวจ Firebase Security Rules
 
 ส่วนนี้เป็นการศึกษาด้วยตนเองเพิ่มเติมจากที่กล่าวถึงสั้น ๆ ในเนื้อหาหัวข้อ 9.9 ไม่ใช่แกนหลักของใบงาน แต่**สำคัญมากสำหรับการทำแอปจริง**เพราะโค้ด Flutter ทั้งหมดที่เขียนมาในส่วนที่ 1-6 ยังไม่ได้ป้องกันไม่ให้ผู้ใช้คนหนึ่งแก้ไข/ลบประกาศของอีกคนหนึ่งเลย (เพียงแค่ UI ไม่มีปุ่มให้กดเท่านั้น ผู้ที่เขียนโค้ดเรียก Firestore เองโดยตรงยังทำได้อยู่)
@@ -709,10 +834,29 @@ service cloud.firestore {
 
 ```text
 บันทึกรูปผลลัพธ์ที่นี่ และคำอธิบาย
+
+1. ภาพหน้าจอผลการทดลองใน Rules Playground กรณี (ก) ผู้ใช้ล็อกอินแก้ไขเอกสารของตนเอง (sellerId ตรงกัน -> Allowed):
+[แนบภาพหน้าจอ Rules Playground กรณีผ่าน (Green / Allowed) ที่นี่]
+
+2. ภาพหน้าจอผลการทดลองใน Rules Playground กรณี (ข) ผู้ใช้พยายามแก้ไขเอกสารของผู้อื่น (sellerId ไม่ตรงกัน -> Denied):
+[แนบภาพหน้าจอ Rules Playground กรณีถูกปฏิเสธ (Red / Denied) ที่นี่]
+
+---
+คำอธิบาย: ทำไม Client-side Validation (การไม่แสดงปุ่มแก้ไขให้เห็น) เพียงอย่างเดียวจึงไม่เพียงพอต่อความปลอดภัยของข้อมูลจริง:
+
+1. ข้อจำกัดของ Client-side Validation:
+   - โค้ดฝั่ง Client (ไม่ว่าจะเขียนด้วย Flutter บนมือถือ หรือ JavaScript บนเว็บ) รันอยู่บนอุปกรณ์ของผู้ใช้ ซึ่งไม่สามารถควบคุมความปลอดภัยได้ 100%
+   - ผู้ไม่หวังดีสามารถทำ Reverse Engineering (Decompile APK), ทำการดักฟังหรือแก้ไข Network Request (Man-in-the-Middle / Proxy), หรือใช้เครื่องมือภายนอก เช่น cURL, Postman, Node.js หรือ Firebase SDK ส่ง HTTP / Firestore API Request ตรงไปยังเซิร์ฟเวอร์ โดยส่ง itemId ของคนอื่น พร้อมข้อมูลดัดแปลงได้โดยไม่ต้องเปิดแอปหรือผ่านหน้าจอ UI ของเราเลย
+   - การซ่อนปุ่มหรือไม่แสดงปุ่มแก้ไขใน UI จึงมีผลแค่ในระดับ UX (อำนวยความสะดวกแก่ผู้ใช้ทั่วไป) ไม่สามารถป้องกันการโจมตีหรือการเข้าถึงโดยตรงได้
+
+2. ความสำคัญของ Firebase Security Rules (Server-side Enforcement):
+   - Firebase Security Rules ทำงานอยู่บนเซิร์ฟเวอร์ของ Google ก่อนที่คำขอใดๆ จะเข้าถึงฐานข้อมูล
+   - ด้วยกฎ:
+     allow update, delete: if request.auth != null && request.auth.uid == resource.data.sellerId;
+     เซิร์ฟเวอร์จะตรวจสอบทุกครั้งว่า Token ของผู้ส่งคำขอ (request.auth.uid) ตรงกับ sellerId ที่ถูกบันทึกไว้ในเอกสารจริงหรือไม่ หากไม่ตรงกัน เซิร์ฟเวอร์จะตัดคำขอและส่งสถานะ PERMISSION_DENIED ทันที ทำให้ไม่สามารถแก้ไขหรือลบข้อมูลของคนอื่นได้ไม่ว่าจะส่งคำขอมาจากช่องทางใดก็ตาม
 ```
 
 ---
-
 ## ส่วนที่ 8: ทดสอบสถานการณ์ Offline และสถานะการล็อกอิน
 
 ### ขั้นตอนที่ 8.1: 🔧 ทำตามขั้นตอน
@@ -728,10 +872,28 @@ service cloud.firestore {
 
 ```text
 บันทึกรูปผลลัพธ์ที่นี่ 
+
+1. ภาพหน้าจอการทดสอบข้อที่ 1 (ล็อกอินค้างไว้ ปิดแอปทั้งหมด แล้วเปิดใหม่ -> เข้า MainScaffold ทันที):
+[แนบภาพหน้าจอเข้าหน้าหลักได้ทันทีโดยไม่ต้องล็อกอินใหม่ที่นี่]
+
+2. ภาพหน้าจอการทดสอบข้อที่ 2 (ปิดเน็ต แล้วเปิดแท็บ "รายการโปรด" และ "ร่างของฉัน" -> ใช้งานได้ปกติจาก Drift SQLite):
+[แนบภาพหน้าจอแท็บรายการโปรด/ร่างทำงานได้ขณะ Offline ที่นี่]
+
+3. ภาพหน้าจอการทดสอบข้อที่ 3 (ขณะปิดเน็ต กด "โพสต์ขายจริง" -> เกิด Error แจ้งเตือนอย่างถูกต้องและแอปไม่ Crash):
+[แนบภาพหน้าจอแสดง SnackBar Error เมื่อไม่มีการเชื่อมต่ออินเทอร์เน็ตที่นี่]
+
+4. ภาพหน้าจอการทดสอบข้อที่ 4 (เปิดเน็ตกลับมา แล้วกด "โพสต์ขายจริง" ใหม่ -> โพสต์สำเร็จ ร่างถูกลบ):
+[แนบภาพหน้าจอโพสต์ขายสำเร็จและแสดงผลบนหน้า Home ที่นี่]
+
+---
+สรุปผลการทดสอบเชิงลึก:
+- ข้อ 1: Firebase Auth จัดเก็บ Token ใน Local Persistence (Shared Preferences / KeyStore) ทำให้ authStateChanges() จำสถานะได้แม้ปิดแอป
+- ข้อ 2: ข้อมูล Favorites และ Drafts ถูกจัดเก็บใน Local SQLite ผ่าน Drift Database จึงไม่พึ่งพาเครือข่ายและทำงานได้แบบ Offline-First 100%
+- ข้อ 3: การโพสต์ขายจริงต้องการอัปโหลดไฟล์ไปยัง Firebase Storage และบันทึก Cloud Firestore ซึ่งต้องใช้เครือข่าย โค้ดมีการใช้ try/catch เพื่อดักจับ Network Exception และแสดงข้อความเตือนอย่างสุภาพ ป้องกันไม่ให้แอป Crash
+- ข้อ 4: เมื่อเครือข่ายพร้อม การทำงานร่วมกันระหว่าง StorageService, ItemRepositoryFirestore และ Drift Database ทำงานได้อย่างสมบูรณ์แบบ
 ```
 
 ---
-
 ## ปัญหาที่พบบ่อยและวิธีแก้ไข (Troubleshooting)
 
 **Error `[core/no-app]` หรือ `Firebase has not been correctly initialized`** มักเกิดจากลืมเรียก `await Firebase.initializeApp(...)` ก่อน `runApp()` หรือลืม `WidgetsFlutterBinding.ensureInitialized()` ที่บรรทัดแรกสุดของ `main()` ตรวจสอบลำดับโค้ดในขั้นตอน 1.3 อีกครั้ง

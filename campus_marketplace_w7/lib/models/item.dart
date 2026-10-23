@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class Item {
   final int id;
   final String title;
@@ -5,6 +7,7 @@ class Item {
   final String description;
   final String category;
   final String imageUrl;
+  final String? sellerId;
 
   const Item({
     required this.id,
@@ -13,6 +16,7 @@ class Item {
     required this.description,
     required this.category,
     required this.imageUrl,
+    this.sellerId,
   });
 
   factory Item.fromJson(Map<String, dynamic> json) {
@@ -21,7 +25,7 @@ class Item {
     final price = (json['price'] as num).toDouble();
     final description = json['description'] as String;
     final category = json['category'] as String;
-    final imageUrl = json['image'] as String; // key 'image' ไม่ตรงกับชื่อ field imageUrl
+    final imageUrl = json['image'] as String;
 
     return Item(
       id: id,
@@ -30,6 +34,30 @@ class Item {
       description: description,
       category: category,
       imageUrl: imageUrl,
+    );
+  }
+
+  Map<String, dynamic> toFirestore() {
+    return {
+      'title': title,
+      'price': price,
+      'description': description,
+      'category': category,
+      'imageUrl': imageUrl,
+      'sellerId': sellerId,
+    };
+  }
+
+  factory Item.fromFirestore(DocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>;
+    return Item(
+      id: int.tryParse(doc.id) ?? doc.id.hashCode.abs(),
+      title: data['title'] as String? ?? '',
+      price: (data['price'] as num?)?.toDouble() ?? 0.0,
+      description: data['description'] as String? ?? '',
+      category: data['category'] as String? ?? '',
+      imageUrl: data['imageUrl'] as String? ?? '',
+      sellerId: data['sellerId'] as String?,
     );
   }
 }

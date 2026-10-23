@@ -1,8 +1,12 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import '../models/item.dart';
 import '../models/listing_draft.dart';
 import '../repositories/listing_draft_repository.dart';
+import '../repositories/item_repository_firestore.dart';
+import '../services/storage_service.dart';
 import '../services/gemini_vision_service.dart';
 
 class SellItemPage extends StatefulWidget {
@@ -17,6 +21,8 @@ class SellItemPage extends StatefulWidget {
 class _SellItemPageState extends State<SellItemPage> {
   File? _selectedImage;
   bool _isLoading = false;
+  bool _isUploading = false;
+  String? _uploadStatusText;
   String? _errorMessage;
 
   final _titleController = TextEditingController();
@@ -37,7 +43,7 @@ class _SellItemPageState extends State<SellItemPage> {
   @override
   void initState() {
     super.initState();
-    _loadSavedDraft(); // โหลดร่างประกาศจาก SQLite เมื่อเปิดหน้า
+    _loadSavedDraft();
   }
 
   @override
@@ -141,21 +147,148 @@ class _SellItemPageState extends State<SellItemPage> {
     }
   }
 
-  // ฟังก์ชันยืนยันลงประกาศขาย (พร้อมเซฟร่างลง SQLite)
-  Future<void> _submitForm() async {
-    if (_titleController.text.trim().isEmpty) {
+  // 4. โพสต์ขายจริง (Upload to Storage & Save to Firestore)
+  Future<void> _postToFirestore() async {
+    final title = _titleController.text.trim();
+    final category = _categoryController.text.trim();
+    final description = _descriptionController.text.trim();
+
+    if (title.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('กรุณากรอกชื่อประกาศก่อนยืนยัน')),
+        const SnackBar(content: Text('กรุณากรอกชื่อประกาศก่อนโพสต์ขาย')),
       );
       return;
     }
 
-    await _saveDraft(); // บันทึกลง SQLite
-
-    if (mounted) {
+    if (_selectedImage == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('ลงประกาศขายและบันทึกร่างเรียบร้อยแล้ว')),
+        const SnackBar(content: Text('กรุณาเลือกรูปภาพสินค้าก่อนโพสต์ขาย')),
       );
+      return;
+    }
+
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('กรุณาเข้าสู่ระบบก่อนทำการโพสต์ขายสินค้า')),
+      );
+      return;
+    }
+
+    // ถามราคาผ่าน Dialog
+    final priceController = TextEditingController();
+    final price = await showDialog<double>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('กำหนดราคาสินค้า'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('ระบุราคาสินค้าที่ต้องการขาย (บาท):'),
+            const SizedBox(height: 12),
+            TextField(
+              controller: priceController,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              autofocus: true,
+              decoration: const InputDecoration(
+                labelText: 'ราคา (บาท)',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.attach_money),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, null),
+            child: const Text('ยกเลิก'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final val = double.tryParse(priceController.text.trim());
+              if (val == null || val <= 0) {
+                ScaffoldMessenger.of(ctx).showSnackBar(
+                  const SnackBar(content: Text('กรุณาระบุราคาเป็นตัวเลขที่มากกว่า 0')),
+                );
+                return;
+              }
+              Navigator.pop(ctx, val);
+            },
+            child: const Text('ยืนยัน'),
+          ),
+        ],
+      ),
+    );
+
+    if (price == null) return;
+
+    setState(() {
+      _isUploading = true;
+      _uploadStatusText = 'กำลังอัปโหลดรูปภาพขึ้น Firebase Storage...';
+      _errorMessage = null;
+    });
+
+    try {
+      // 1. อัปโหลดรูปขึ้น Storage
+      final storageService = StorageService();
+      final imageUrl = await storageService.uploadListingImage(
+        _selectedImage!,
+        user.uid,
+      );
+
+      setState(() {
+        _uploadStatusText = 'กำลังบันทึกข้อมูลสินค้าลง Cloud Firestore...';
+      });
+
+      // 2. สร้าง Item และบันทึกลง Firestore
+      final newItem = Item(
+        id: 0,
+        title: title,
+        price: price,
+        description: description,
+        category: category.isEmpty ? 'ทั่วไป' : category,
+        imageUrl: imageUrl,
+        sellerId: user.uid,
+      );
+
+      await ItemRepositoryFirestore().postItem(newItem);
+
+      // 3. ลบร่างออกจาก Local Database (SQLite)
+      await widget.draftRepository.deleteDraft();
+
+      setState(() {
+        _selectedImage = null;
+        _titleController.clear();
+        _categoryController.clear();
+        _descriptionController.clear();
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            backgroundColor: Colors.green,
+            content: Text('🎉 โพสต์ขายสินค้าลงระบบเรียบร้อยแล้ว! ร่างเดิมถูกลบแล้ว'),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: Colors.red,
+            content: Text('เกิดข้อผิดพลาดในการโพสต์: $e'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isUploading = false;
+          _uploadStatusText = null;
+        });
+      }
     }
   }
 
@@ -168,12 +301,12 @@ class _SellItemPageState extends State<SellItemPage> {
           IconButton(
             icon: const Icon(Icons.delete_outline),
             tooltip: 'ลบร่าง',
-            onPressed: _clearDraft,
+            onPressed: _isUploading ? null : _clearDraft,
           ),
           IconButton(
             icon: const Icon(Icons.save_outlined),
             tooltip: 'บันทึกร่าง',
-            onPressed: _saveDraft,
+            onPressed: _isUploading ? null : _saveDraft,
           ),
         ],
       ),
@@ -183,21 +316,27 @@ class _SellItemPageState extends State<SellItemPage> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _selectedImage != null
-                ? Image.file(_selectedImage!, height: 200, fit: BoxFit.cover)
+                ? ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.file(_selectedImage!, height: 200, fit: BoxFit.cover),
+                  )
                 : Container(
                     height: 200,
-                    color: Colors.grey[200],
+                    decoration: BoxDecoration(
+                      color: Colors.grey[200],
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                     child: const Icon(Icons.image, size: 80, color: Colors.grey),
                   ),
             const SizedBox(height: 12),
             ElevatedButton.icon(
-              onPressed: _pickImage,
+              onPressed: _isUploading ? null : _pickImage,
               icon: const Icon(Icons.photo_library),
               label: const Text('เลือกรูปภาพสินค้า'),
             ),
             const SizedBox(height: 12),
             ElevatedButton.icon(
-              onPressed: (_selectedImage == null || _isLoading)
+              onPressed: (_selectedImage == null || _isLoading || _isUploading)
                   ? null
                   : _analyzeImage,
               icon: const Icon(Icons.auto_awesome),
@@ -216,6 +355,26 @@ class _SellItemPageState extends State<SellItemPage> {
                   Text('AI กำลังวิเคราะห์ภาพสินค้า...'),
                 ],
               ),
+            if (_isUploading)
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.deepPurple.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.deepPurple.shade200),
+                ),
+                child: Column(
+                  children: [
+                    const CircularProgressIndicator(),
+                    const SizedBox(height: 12),
+                    Text(
+                      _uploadStatusText ?? 'กำลังดำเนินการ...',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
             if (_errorMessage != null)
               Padding(
                 padding: const EdgeInsets.only(bottom: 12.0),
@@ -229,6 +388,7 @@ class _SellItemPageState extends State<SellItemPage> {
             const Divider(height: 32),
             TextField(
               controller: _titleController,
+              enabled: !_isUploading,
               decoration: const InputDecoration(
                 labelText: 'ชื่อประกาศ',
                 border: OutlineInputBorder(),
@@ -237,6 +397,7 @@ class _SellItemPageState extends State<SellItemPage> {
             const SizedBox(height: 12),
             TextField(
               controller: _categoryController,
+              enabled: !_isUploading,
               decoration: const InputDecoration(
                 labelText: 'หมวดหมู่',
                 border: OutlineInputBorder(),
@@ -245,6 +406,7 @@ class _SellItemPageState extends State<SellItemPage> {
             const SizedBox(height: 12),
             TextField(
               controller: _descriptionController,
+              enabled: !_isUploading,
               maxLines: 3,
               decoration: const InputDecoration(
                 labelText: 'คำบรรยายสินค้า',
@@ -252,12 +414,32 @@ class _SellItemPageState extends State<SellItemPage> {
               ),
             ),
             const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: _submitForm,
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-              ),
-              child: const Text('ยืนยันร่างประกาศ', style: TextStyle(fontSize: 16)),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _isUploading ? null : _saveDraft,
+                    icon: const Icon(Icons.save),
+                    label: const Text('บันทึกเป็นร่าง'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: _isUploading ? null : _postToFirestore,
+                    icon: const Icon(Icons.cloud_upload),
+                    label: const Text('โพสต์ขายจริง'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green[700],
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
